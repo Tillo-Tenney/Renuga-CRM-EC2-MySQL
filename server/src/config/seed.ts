@@ -8,8 +8,8 @@ const seedData = async () => {
     console.log('Starting database seeding...');
 
     // Check if data already exists
-    const [existingUsers] = await connection.execute('SELECT COUNT(*) as count FROM users');
-    if (existingUsers[0].count > 0) {
+    const [[existingUsers]] = await connection.execute('SELECT COUNT(*) as count FROM users') as any;
+    if (existingUsers.count > 0) {
       console.log('Database already seeded. Skipping...');
       return;
     }

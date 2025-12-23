@@ -27,7 +27,7 @@ export const login = async (req: Request, res: Response) => {
       const [rows] = await connection.execute(
         'SELECT id, name, email, password_hash, role, is_active, page_access FROM users WHERE email = ?',
         [email.toLowerCase()]
-      );
+      ) as any;
 
       if (rows.length === 0) {
         return res.status(401).json({ error: 'Invalid credentials' });
@@ -104,7 +104,7 @@ export const validateToken = async (req: Request, res: Response) => {
       const [rows] = await connection.execute(
         'SELECT id, name, email, role, is_active, page_access FROM users WHERE id = ?',
         [decoded.id]
-      );
+      ) as any;
 
       if (rows.length === 0 || !rows[0].is_active) {
         return res.status(401).json({ error: 'User not found or inactive' });

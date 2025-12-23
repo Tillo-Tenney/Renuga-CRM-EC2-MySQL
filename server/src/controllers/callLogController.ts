@@ -9,7 +9,7 @@ export const getAllCallLogs = async (req: AuthRequest, res: Response) => {
     try {
       const [rows] = await connection.execute(
         'SELECT * FROM call_logs ORDER BY call_date DESC'
-      );
+      ) as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -25,7 +25,7 @@ export const getCallLogById = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]) as any;
       
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Call log not found' });
@@ -69,7 +69,7 @@ export const createCallLog = async (req: AuthRequest, res: Response) => {
       );
 
       // Fetch the created record
-      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -100,7 +100,7 @@ export const updateCallLog = async (req: AuthRequest, res: Response) => {
         [id, ...values]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM call_logs WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Call log not found' });
@@ -121,7 +121,7 @@ export const deleteCallLog = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const result = await connection.execute('DELETE FROM call_logs WHERE id = ?', [id]);
+      const [result] = await connection.execute('DELETE FROM call_logs WHERE id = ?', [id]) as any;
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Call log not found' });

@@ -7,7 +7,7 @@ export const getAllProducts = async (req: AuthRequest, res: Response) => {
   try {
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM products ORDER BY name');
+      const [rows] = await connection.execute('SELECT * FROM products ORDER BY name') as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -23,7 +23,7 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]) as any;
       
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Product not found' });
@@ -52,7 +52,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
         [id, name, category, unit, price, availableQuantity, thresholdQuantity, status, isActive !== undefined ? isActive : true]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -83,7 +83,7 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
         [id, ...values]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Product not found' });
@@ -104,7 +104,7 @@ export const deleteProduct = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const result = await connection.execute('DELETE FROM products WHERE id = ?', [id]);
+      const [result] = await connection.execute('DELETE FROM products WHERE id = ?', [id]) as any;
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Product not found' });

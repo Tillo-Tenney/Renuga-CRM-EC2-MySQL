@@ -11,7 +11,7 @@ export const getAllTasks = async (req: AuthRequest, res: Response) => {
   try {
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM tasks ORDER BY due_date');
+      const [rows] = await connection.execute('SELECT * FROM tasks ORDER BY due_date') as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -34,7 +34,7 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         [id, type, linkedTo, linkedId, customerName, dueDate, status, assignedTo, remarks]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM tasks WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM tasks WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -64,7 +64,7 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
         [id, ...values]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM tasks WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM tasks WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Task not found' });
@@ -85,7 +85,7 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const result = await connection.execute('DELETE FROM tasks WHERE id = ?', [id]);
+      const [result] = await connection.execute('DELETE FROM tasks WHERE id = ?', [id]) as any;
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Task not found' });
@@ -106,7 +106,7 @@ export const getAllCustomers = async (req: AuthRequest, res: Response) => {
   try {
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM customers ORDER BY name');
+      const [rows] = await connection.execute('SELECT * FROM customers ORDER BY name') as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -129,7 +129,7 @@ export const createCustomer = async (req: AuthRequest, res: Response) => {
         [id, name, mobile, email || null, address || null, totalOrders || 0, totalValue || 0]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM customers WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM customers WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -159,7 +159,7 @@ export const updateCustomer = async (req: AuthRequest, res: Response) => {
         [id, ...values]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM customers WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM customers WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Customer not found' });
@@ -182,7 +182,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
     try {
       const [rows] = await connection.execute(
         `SELECT id, name, email, role, is_active, page_access FROM users ORDER BY name`
-      );
+      ) as any;
       
       // Parse page_access JSON strings
       const usersWithParsedAccess = (rows as any[]).map(user => ({
@@ -227,7 +227,7 @@ export const createUser = async (req: AuthRequest, res: Response) => {
       const [rows] = await connection.execute(
         'SELECT id, name, email, role, is_active, page_access FROM users WHERE id = ?',
         [id]
-      );
+      ) as any;
 
       const user = rows[0];
       res.status(201).json({
@@ -277,7 +277,7 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       const [rows] = await connection.execute(
         'SELECT id, name, email, role, is_active, page_access FROM users WHERE id = ?',
         [id]
-      );
+      ) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'User not found' });
@@ -302,7 +302,7 @@ export const getAllShiftNotes = async (req: AuthRequest, res: Response) => {
   try {
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM shift_notes ORDER BY created_at DESC');
+      const [rows] = await connection.execute('SELECT * FROM shift_notes ORDER BY created_at DESC') as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -325,7 +325,7 @@ export const createShiftNote = async (req: AuthRequest, res: Response) => {
         [id, createdBy, content, isActive !== undefined ? isActive : true]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM shift_notes WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM shift_notes WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -349,7 +349,7 @@ export const updateShiftNote = async (req: AuthRequest, res: Response) => {
         [content, isActive, id]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM shift_notes WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM shift_notes WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Shift note not found' });
@@ -382,7 +382,7 @@ export const getRemarkLogs = async (req: AuthRequest, res: Response) => {
 
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute(query, params);
+      const [rows] = await connection.execute(query, params) as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -405,7 +405,7 @@ export const createRemarkLog = async (req: AuthRequest, res: Response) => {
         [id, entityType, entityId, remark, createdBy]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM remark_logs WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM remark_logs WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();

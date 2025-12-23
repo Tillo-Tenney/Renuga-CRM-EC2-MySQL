@@ -9,7 +9,7 @@ export const getAllLeads = async (req: AuthRequest, res: Response) => {
     try {
       const [rows] = await connection.execute(
         'SELECT * FROM leads ORDER BY created_date DESC'
-      );
+      ) as any;
       res.json(rows);
     } finally {
       connection.release();
@@ -25,7 +25,7 @@ export const getLeadById = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]) as any;
       
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Lead not found' });
@@ -77,7 +77,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
          assignedTo, estimatedValue || null, remarks]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]) as any;
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
@@ -108,7 +108,7 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
         [id, ...values]
       );
 
-      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]) as any;
 
       if (rows.length === 0) {
         return res.status(404).json({ error: 'Lead not found' });
@@ -129,7 +129,7 @@ export const deleteLead = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const connection = await pool.getConnection();
     try {
-      const result = await connection.execute('DELETE FROM leads WHERE id = ?', [id]);
+      const [result] = await connection.execute('DELETE FROM leads WHERE id = ?', [id]) as any;
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Lead not found' });
