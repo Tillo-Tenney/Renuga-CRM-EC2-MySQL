@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
-import { parseDate } from '../utils/dateUtils.js';
+import { parseDate, toMySQLDateTime } from '../utils/dateUtils.js';
 
 export const getAllOrders = async (req: AuthRequest, res: Response) => {
   try {
@@ -94,22 +94,29 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Parse and validate dates
-    let parsedOrderDate: string | null;
-    let parsedExpectedDeliveryDate: string | null;
-    let parsedActualDeliveryDate: string | null = null;
+    // Parse and validate dates, then convert to MySQL format
+    let mysqlOrderDate: string | null;
+    let mysqlExpectedDeliveryDate: string | null;
+    let mysqlActualDeliveryDate: string | null = null;
 
     try {
-      parsedOrderDate = parseDate(orderDate);
+      const parsedOrderDate = parseDate(orderDate);
       if (!parsedOrderDate) {
         return res.status(400).json({ error: 'Invalid order date' });
       }
-      parsedExpectedDeliveryDate = parseDate(expectedDeliveryDate);
+      mysqlOrderDate = toMySQLDateTime(parsedOrderDate);
+      
+      const parsedExpectedDeliveryDate = parseDate(expectedDeliveryDate);
       if (!parsedExpectedDeliveryDate) {
         return res.status(400).json({ error: 'Invalid expected delivery date' });
       }
+      mysqlExpectedDeliveryDate = toMySQLDateTime(parsedExpectedDeliveryDate);
+      
       if (actualDeliveryDate) {
-        parsedActualDeliveryDate = parseDate(actualDeliveryDate);
+        const parsedActualDeliveryDate = parseDate(actualDeliveryDate);
+        if (parsedActualDeliveryDate) {
+          mysqlActualDeliveryDate = toMySQLDateTime(parsedActualDeliveryDate);
+        }
       }
     } catch (dateError) {
       return res.status(400).json({ 
@@ -132,7 +139,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
           is_delayed, payment_status, invoice_number, assigned_to, remarks)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, leadId || null, callId || null, customerName, mobile, deliveryAddress,
-         totalAmount, status, parsedOrderDate, parsedExpectedDeliveryDate, parsedActualDeliveryDate,
+         totalAmount, status, mysqlOrderDate, mysqlExpectedDeliveryDate, mysqlActualDeliveryDate,
          agingDays || 0, isDelayed || false, paymentStatus, invoiceNumber || null,
          assignedTo, remarks || null]
       );

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
-import { parseDate } from '../utils/dateUtils.js';
+import { parseDate, toMySQLDateTime } from '../utils/dateUtils.js';
 
 export const getAllCallLogs = async (req: AuthRequest, res: Response) => {
   try {
@@ -65,17 +65,22 @@ export const createCallLog = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Parse and validate dates
-    let parsedCallDate: string | null;
-    let parsedFollowUpDate: string | null = null;
+    // Parse and validate dates, then convert to MySQL format
+    let mysqlCallDate: string | null;
+    let mysqlFollowUpDate: string | null = null;
 
     try {
-      parsedCallDate = parseDate(callDate);
+      const parsedCallDate = parseDate(callDate);
       if (!parsedCallDate) {
         return res.status(400).json({ error: 'Invalid call date' });
       }
+      mysqlCallDate = toMySQLDateTime(parsedCallDate);
+      
       if (followUpDate) {
-        parsedFollowUpDate = parseDate(followUpDate);
+        const parsedFollowUpDate = parseDate(followUpDate);
+        if (parsedFollowUpDate) {
+          mysqlFollowUpDate = toMySQLDateTime(parsedFollowUpDate);
+        }
       }
     } catch (dateError) {
       return res.status(400).json({ 
@@ -90,8 +95,8 @@ export const createCallLog = async (req: AuthRequest, res: Response) => {
          (id, call_date, customer_name, mobile, query_type, product_interest, 
           next_action, follow_up_date, remarks, assigned_to, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, parsedCallDate, customerName, mobile, queryType || null, productInterest || null, 
-         nextAction, parsedFollowUpDate, remarks || null, assignedTo, status]
+        [id, mysqlCallDate, customerName, mobile, queryType || null, productInterest || null, 
+         nextAction, mysqlFollowUpDate, remarks || null, assignedTo, status]
       );
 
       // Fetch the created record to confirm

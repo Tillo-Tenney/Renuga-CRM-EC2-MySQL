@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
-import { parseDate } from '../utils/dateUtils.js';
+import { parseDate, toMySQLDateTime } from '../utils/dateUtils.js';
 
 export const getAllLeads = async (req: AuthRequest, res: Response) => {
   try {
@@ -71,21 +71,29 @@ export const createLead = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Parse and validate dates
-    let parsedCreatedDate: string | null;
-    let parsedLastFollowUp: string | null = null;
-    let parsedNextFollowUp: string | null = null;
+    // Parse and validate dates, then convert to MySQL format
+    let mysqlCreatedDate: string | null;
+    let mysqlLastFollowUp: string | null = null;
+    let mysqlNextFollowUp: string | null = null;
 
     try {
-      parsedCreatedDate = parseDate(createdDate);
+      const parsedCreatedDate = parseDate(createdDate);
       if (!parsedCreatedDate) {
         return res.status(400).json({ error: 'Invalid created date' });
       }
+      mysqlCreatedDate = toMySQLDateTime(parsedCreatedDate);
+      
       if (lastFollowUp) {
-        parsedLastFollowUp = parseDate(lastFollowUp);
+        const parsedLastFollowUp = parseDate(lastFollowUp);
+        if (parsedLastFollowUp) {
+          mysqlLastFollowUp = toMySQLDateTime(parsedLastFollowUp);
+        }
       }
       if (nextFollowUp) {
-        parsedNextFollowUp = parseDate(nextFollowUp);
+        const parsedNextFollowUp = parseDate(nextFollowUp);
+        if (parsedNextFollowUp) {
+          mysqlNextFollowUp = toMySQLDateTime(parsedNextFollowUp);
+        }
       }
     } catch (dateError) {
       return res.status(400).json({ 
@@ -102,8 +110,8 @@ export const createLead = async (req: AuthRequest, res: Response) => {
           last_follow_up, next_follow_up, assigned_to, estimated_value, remarks)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, callId || null, customerName, mobile, email || null, address || null, 
-         productInterest || null, plannedPurchaseQuantity || null, status, parsedCreatedDate, 
-         agingDays || 0, agingBucket || null, parsedLastFollowUp, parsedNextFollowUp, 
+         productInterest || null, plannedPurchaseQuantity || null, status, mysqlCreatedDate, 
+         agingDays || 0, agingBucket || null, mysqlLastFollowUp, mysqlNextFollowUp, 
          assignedTo, estimatedValue || null, remarks || null]
       );
 
