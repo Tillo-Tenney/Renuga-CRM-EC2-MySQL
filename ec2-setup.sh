@@ -261,66 +261,178 @@ EOF
     print_success "Frontend .env.local created"
     print_info "Environment: VITE_API_URL=http://${PUBLIC_IP}:3001"
     
+    # ============================================================================
+    # INSTALL DEPENDENCIES
+    # ============================================================================
     print_info "Installing frontend dependencies (this may take 2-3 minutes)..."
-    # Clean up old packages to avoid conflicts
-    rm -rf node_modules package-lock.json
     
-    # Use npm install to rebuild from scratch with proper error handling
-    if ! timeout 600 npm install --legacy-peer-deps > /tmp/frontend-install.log 2>&1; then
-        print_error "Frontend dependency installation failed"
-        print_error "Install log:"
-        tail -50 /tmp/frontend-install.log
+    # Clean up old packages to avoid conflicts
+    print_info "Cleaning old node_modules and lock file..."
+    rm -rf node_modules package-lock.json
+    print_success "Cleaned"
+    
+    # Create install log file
+    INSTALL_LOG="/tmp/frontend-install-$(date +%s).log"
+    print_info "Install log: ${INSTALL_LOG}"
+    
+    # Run npm install with very verbose output
+    print_info "Running: npm install --legacy-peer-deps"
+    (
+        echo "=== Frontend npm install started at $(date) ===" > "${INSTALL_LOG}"
+        npm install --legacy-peer-deps 2>&1 | tee -a "${INSTALL_LOG}"
+        echo "=== Frontend npm install completed at $(date) ===" >> "${INSTALL_LOG}"
+    ) &
+    local INSTALL_PID=$!
+    
+    # Wait for install with timeout
+    if ! timeout 600 wait $INSTALL_PID; then
+        EXIT_CODE=$?
+        print_error "Frontend dependency installation failed or timed out (exit code: ${EXIT_CODE})"
+        print_error ""
+        print_error "Last 50 lines of install log:"
+        if [ -f "${INSTALL_LOG}" ]; then
+            tail -50 "${INSTALL_LOG}"
+        else
+            print_error "ERROR: Log file not created at ${INSTALL_LOG}"
+        fi
+        return 1
+    fi
+    
+    # Verify npm install exit code
+    if [ $? -ne 0 ]; then
+        print_error "npm install process exited with error"
+        tail -50 "${INSTALL_LOG}"
         return 1
     fi
     
     # Verify Vite was installed
+    print_info "Verifying Vite installation..."
     if ! npm ls vite > /dev/null 2>&1; then
         print_error "Vite failed to install"
-        print_error "Current node_modules:"
-        ls -la node_modules | head -20
+        print_error "npm ls output:"
+        npm ls 2>&1 | tail -30
         return 1
     fi
-    print_success "Frontend dependencies installed"
+    print_success "Frontend dependencies installed successfully"
     
+    # ============================================================================
+    # BUILD FRONTEND
+    # ============================================================================
     print_info "Building frontend for production (this may take 3-5 minutes)..."
     print_info "Vite is compiling TypeScript and bundling assets..."
     
-    # Create build log file for monitoring
+    # Create build log file
     BUILD_LOG="/tmp/frontend-build-$(date +%s).log"
+    print_info "Build log: ${BUILD_LOG}"
+    print_info "View progress with: tail -f ${BUILD_LOG}"
     
-    # Set memory limit for Node.js to prevent OOM during build
-    # Also disable minification for faster builds on EC2 (can be optimized later)
-    if ! timeout 900 bash -c 'NODE_OPTIONS="--max_old_space_size=2048" npm run build > '"${BUILD_LOG}"' 2>&1'; then
-        EXIT_CODE=$?
-        print_error "Frontend build failed or timed out (exit code: ${EXIT_CODE})"
+    # Check Node.js version
+    print_info "Node.js: $(node --version)"
+    print_info "npm: $(npm --version)"
+    
+    # Set memory limit
+    export NODE_OPTIONS="--max_old_space_size=2048"
+    print_info "Memory limit: 2048 MB"
+    
+    # Clean any stale build files  
+    print_info "Cleaning stale build cache..."
+    rm -rf node_modules/.vite dist .next out 2>/dev/null || true
+    
+    # Initialize log file with header
+    {
+        echo "========================================"
+        echo "Frontend Build Log"
+        echo "========================================"
+        echo "Started: $(date)"
+        echo "Node: $(node --version)"
+        echo "npm: $(npm --version)"
+        echo "Working directory: $(pwd)"
+        echo "========================================"
+        echo ""
+    } > "${BUILD_LOG}"
+    
+    # Run the build with tee for real-time output to log
+    # This is more reliable than bash subshells
+    print_info "Running: npm run build"
+    print_info ""
+    
+    timeout 900 npm run build 2>&1 | tee -a "${BUILD_LOG}"
+    BUILD_EXIT=${PIPESTATUS[0]}  # Get the exit code of npm, not tee
+    
+    # Log completion
+    {
+        echo ""
+        echo "========================================"
+        echo "Build completed at: $(date)"
+        echo "Exit code: ${BUILD_EXIT}"
+        echo "========================================"
+    } >> "${BUILD_LOG}"
+    
+    # Check for timeout (exit code 124)
+    if [ $BUILD_EXIT -eq 124 ]; then
+        print_error "Build timeout after 900 seconds (15 minutes)"
         print_error ""
-        print_error "Build log (last 100 lines):"
-        tail -100 "${BUILD_LOG}"
+        print_error "Possible causes:"
+        print_error "  • Insufficient memory (need 2GB+)"
+        print_error "  • Slow disk I/O"
+        print_error "  • Network issues during npm install"
+        print_error "  • Process stuck on Vite compilation"
         print_error ""
-        print_error "Full build log available at: ${BUILD_LOG}"
+        print_error "Debug steps:"
+        print_error "  1. Check resources: free -h && df -h"
+        print_error "  2. View log: tail -100 ${BUILD_LOG}"
+        print_error "  3. Kill hung process: pkill -9 node"
+        print_error "  4. Try again with larger instance"
         return 1
     fi
     
-    # Verify build output exists
+    # Check for other build errors
+    if [ $BUILD_EXIT -ne 0 ]; then
+        print_error "Frontend build failed (exit code: ${BUILD_EXIT})"
+        print_error ""
+        print_error "Build log location: ${BUILD_LOG}"
+        print_error "View log: tail -50 ${BUILD_LOG}"
+        return 1
+    fi
+    
+    # ============================================================================
+    # VERIFY BUILD OUTPUT
+    # ============================================================================
+    print_info "Verifying build artifacts..."
+    
+    # Check dist directory
     if [ ! -d "dist" ]; then
-        print_error "Frontend dist directory not created after build"
-        print_error "Build output:"
-        cat "${BUILD_LOG}"
+        print_error "ERROR: dist directory not created"
+        print_error "Build log contents:"
+        if [ -f "${BUILD_LOG}" ]; then
+            cat "${BUILD_LOG}"
+        fi
         return 1
     fi
+    print_success "dist directory exists"
     
-    # Verify index.html exists
+    # Check index.html
     if [ ! -f "dist/index.html" ]; then
-        print_error "Frontend dist/index.html not found after build"
-        print_error "Contents of dist:"
-        ls -la dist/ 2>/dev/null || echo "dist directory missing"
+        print_error "ERROR: dist/index.html not found"
+        print_error "dist directory contents:"
+        ls -lah dist/
+        print_error ""
+        print_error "Build log:"
+        tail -50 "${BUILD_LOG}"
         return 1
     fi
+    print_success "dist/index.html exists"
     
+    # Show build artifacts
     print_success "Frontend built successfully"
     print_info "Build artifacts:"
-    du -sh dist/
-    ls -lh dist/ | head -10
+    du -sh dist/ 2>/dev/null | sed 's/^/  /'
+    print_info "Top files in dist/:"
+    ls -lh dist/ | tail -10 | sed 's/^/  /'
+    
+    # Save build log summary
+    print_info "Build completed successfully at $(date)"
+    print_info "Full build log available at: ${BUILD_LOG}"
 }
 
 setup_pm2() {

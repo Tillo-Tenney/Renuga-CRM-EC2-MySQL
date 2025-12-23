@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
+    emptyOutDir: true,
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -21,6 +23,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  // Only use componentTagger in development mode, not in production
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
