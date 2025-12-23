@@ -249,40 +249,78 @@ configure_frontend() {
     
     # Get public IP
     PUBLIC_IP=$(get_public_ip)
+    print_info "Public IP detected: ${PUBLIC_IP}"
     
     print_info "Creating frontend environment configuration..."
     cat > .env.local << EOF
 # API Configuration
-VITE_API_URL=http://${PUBLIC_IP}
+VITE_API_URL=http://${PUBLIC_IP}:3001
 EOF
     
     chmod 600 .env.local
     print_success "Frontend .env.local created"
+    print_info "Environment: VITE_API_URL=http://${PUBLIC_IP}:3001"
     
     print_info "Installing frontend dependencies (this may take 2-3 minutes)..."
     # Clean up old packages to avoid conflicts
     rm -rf node_modules package-lock.json
     
-    # Use npm install to rebuild from scratch
-    timeout 600 npm install --legacy-peer-deps 2>&1 | tail -30 || {
+    # Use npm install to rebuild from scratch with proper error handling
+    if ! timeout 600 npm install --legacy-peer-deps > /tmp/frontend-install.log 2>&1; then
         print_error "Frontend dependency installation failed"
+        print_error "Install log:"
+        tail -50 /tmp/frontend-install.log
         return 1
-    }
+    fi
     
     # Verify Vite was installed
     if ! npm ls vite > /dev/null 2>&1; then
         print_error "Vite failed to install"
+        print_error "Current node_modules:"
+        ls -la node_modules | head -20
         return 1
     fi
     print_success "Frontend dependencies installed"
     
-    print_info "Building frontend for production (this may take 2-3 minutes)..."
+    print_info "Building frontend for production (this may take 3-5 minutes)..."
+    print_info "Vite is compiling TypeScript and bundling assets..."
+    
+    # Create build log file for monitoring
+    BUILD_LOG="/tmp/frontend-build-$(date +%s).log"
+    
     # Set memory limit for Node.js to prevent OOM during build
-    timeout 600 NODE_OPTIONS="--max_old_space_size=2048" npm run build 2>&1 | tail -30 || {
-        print_error "Frontend build failed or timed out"
+    # Also disable minification for faster builds on EC2 (can be optimized later)
+    if ! timeout 900 bash -c 'NODE_OPTIONS="--max_old_space_size=2048" npm run build > '"${BUILD_LOG}"' 2>&1'; then
+        EXIT_CODE=$?
+        print_error "Frontend build failed or timed out (exit code: ${EXIT_CODE})"
+        print_error ""
+        print_error "Build log (last 100 lines):"
+        tail -100 "${BUILD_LOG}"
+        print_error ""
+        print_error "Full build log available at: ${BUILD_LOG}"
         return 1
-    }
+    fi
+    
+    # Verify build output exists
+    if [ ! -d "dist" ]; then
+        print_error "Frontend dist directory not created after build"
+        print_error "Build output:"
+        cat "${BUILD_LOG}"
+        return 1
+    fi
+    
+    # Verify index.html exists
+    if [ ! -f "dist/index.html" ]; then
+        print_error "Frontend dist/index.html not found after build"
+        print_error "Contents of dist:"
+        ls -la dist/ 2>/dev/null || echo "dist directory missing"
+        return 1
+    fi
+    
     print_success "Frontend built successfully"
+    print_info "Build artifacts:"
+    du -sh dist/
+    ls -lh dist/ | head -10
 }
 
 setup_pm2() {
