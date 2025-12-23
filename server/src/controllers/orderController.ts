@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
+import { parseDate } from '../utils/dateUtils.js';
 
 export const getAllOrders = async (req: AuthRequest, res: Response) => {
   try {
@@ -65,8 +66,6 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
   const connection = await pool.getConnection();
   
   try {
-    await connection.beginTransaction();
-
     const {
       id,
       leadId,
@@ -88,28 +87,68 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
       remarks,
     } = req.body;
 
-    // Insert order
-    await connection.execute(
-      `INSERT INTO orders 
-       (id, lead_id, call_id, customer_name, mobile, delivery_address, total_amount,
-        status, order_date, expected_delivery_date, actual_delivery_date, aging_days,
-        is_delayed, payment_status, invoice_number, assigned_to, remarks)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, leadId || null, callId || null, customerName, mobile, deliveryAddress,
-       totalAmount, status, orderDate, expectedDeliveryDate, actualDeliveryDate || null,
-       agingDays || 0, isDelayed || false, paymentStatus, invoiceNumber || null,
-       assignedTo, remarks]
-    );
+    // Validate required fields
+    if (!id || !customerName || !mobile || !deliveryAddress || !totalAmount || !status || !orderDate || !expectedDeliveryDate || !paymentStatus || !assignedTo) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: id, customerName, mobile, deliveryAddress, totalAmount, status, orderDate, expectedDeliveryDate, paymentStatus, assignedTo' 
+      });
+    }
 
-    // Insert order products
-    if (products && products.length > 0) {
+    // Parse and validate dates
+    let parsedOrderDate: string | null;
+    let parsedExpectedDeliveryDate: string | null;
+    let parsedActualDeliveryDate: string | null = null;
+
+    try {
+      parsedOrderDate = parseDate(orderDate);
+      if (!parsedOrderDate) {
+        return res.status(400).json({ error: 'Invalid order date' });
+      }
+      parsedExpectedDeliveryDate = parseDate(expectedDeliveryDate);
+      if (!parsedExpectedDeliveryDate) {
+        return res.status(400).json({ error: 'Invalid expected delivery date' });
+      }
+      if (actualDeliveryDate) {
+        parsedActualDeliveryDate = parseDate(actualDeliveryDate);
+      }
+    } catch (dateError) {
+      return res.status(400).json({ 
+        error: `Invalid date format: ${dateError instanceof Error ? dateError.message : String(dateError)}` 
+      });
+    }
+
+    // Validate products array
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: 'Order must include at least one product' });
+    }
+
+    await connection.beginTransaction();
+    try {
+      // Insert order
+      await connection.execute(
+        `INSERT INTO orders 
+         (id, lead_id, call_id, customer_name, mobile, delivery_address, total_amount,
+          status, order_date, expected_delivery_date, actual_delivery_date, aging_days,
+          is_delayed, payment_status, invoice_number, assigned_to, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, leadId || null, callId || null, customerName, mobile, deliveryAddress,
+         totalAmount, status, parsedOrderDate, parsedExpectedDeliveryDate, parsedActualDeliveryDate,
+         agingDays || 0, isDelayed || false, paymentStatus, invoiceNumber || null,
+         assignedTo, remarks || null]
+      );
+
+      // Insert order products
       for (const product of products) {
+        if (!product.productId || !product.productName || !product.quantity || !product.unitPrice) {
+          throw new Error(`Invalid product data: missing required fields`);
+        }
+
         await connection.execute(
           `INSERT INTO order_products 
            (order_id, product_id, product_name, quantity, unit, unit_price, total_price)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [id, product.productId, product.productName, product.quantity,
-           product.unit, product.unitPrice, product.totalPrice]
+           product.unit || '', product.unitPrice, product.totalPrice]
         );
 
         // Update product quantity with validation
@@ -122,26 +161,36 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
           throw new Error(`Insufficient inventory for product ${product.productName}`);
         }
       }
+
+      await connection.commit();
+
+      // Fetch complete order with products
+      const [completeOrder] = await connection.execute(
+        'SELECT * FROM orders WHERE id = ?',
+        [id]
+      ) as any;
+      
+      if (completeOrder.length === 0) {
+        return res.status(500).json({ error: 'Failed to retrieve created order' });
+      }
+
+      const [orderProducts] = await connection.execute(
+        'SELECT * FROM order_products WHERE order_id = ?',
+        [id]
+      ) as any;
+      
+      completeOrder[0].products = orderProducts;
+      res.status(201).json(completeOrder[0]);
+    } catch (transactionError) {
+      await connection.rollback();
+      throw transactionError;
     }
-
-    await connection.commit();
-
-    // Fetch complete order with products
-    const [completeOrder] = await connection.execute(
-      'SELECT * FROM orders WHERE id = ?',
-      [id]
-    ) as any;
-    const [orderProducts] = await connection.execute(
-      'SELECT * FROM order_products WHERE order_id = ?',
-      [id]
-    ) as any;
-    completeOrder[0].products = orderProducts;
-
-    res.status(201).json(completeOrder[0]);
   } catch (error) {
-    await connection.rollback();
     console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ 
+      error: 'Failed to create order',
+      details: error instanceof Error ? error.message : String(error)
+    });
   } finally {
     connection.release();
   }

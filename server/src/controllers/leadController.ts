@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
+import { parseDate } from '../utils/dateUtils.js';
 
 export const getAllLeads = async (req: AuthRequest, res: Response) => {
   try {
@@ -63,6 +64,35 @@ export const createLead = async (req: AuthRequest, res: Response) => {
       remarks,
     } = req.body;
 
+    // Validate required fields
+    if (!id || !customerName || !mobile || !status || !createdDate || !assignedTo) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: id, customerName, mobile, status, createdDate, assignedTo' 
+      });
+    }
+
+    // Parse and validate dates
+    let parsedCreatedDate: string | null;
+    let parsedLastFollowUp: string | null = null;
+    let parsedNextFollowUp: string | null = null;
+
+    try {
+      parsedCreatedDate = parseDate(createdDate);
+      if (!parsedCreatedDate) {
+        return res.status(400).json({ error: 'Invalid created date' });
+      }
+      if (lastFollowUp) {
+        parsedLastFollowUp = parseDate(lastFollowUp);
+      }
+      if (nextFollowUp) {
+        parsedNextFollowUp = parseDate(nextFollowUp);
+      }
+    } catch (dateError) {
+      return res.status(400).json({ 
+        error: `Invalid date format: ${dateError instanceof Error ? dateError.message : String(dateError)}` 
+      });
+    }
+
     const connection = await pool.getConnection();
     try {
       await connection.execute(
@@ -72,19 +102,25 @@ export const createLead = async (req: AuthRequest, res: Response) => {
           last_follow_up, next_follow_up, assigned_to, estimated_value, remarks)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, callId || null, customerName, mobile, email || null, address || null, 
-         productInterest, plannedPurchaseQuantity || null, status, createdDate, 
-         agingDays || 0, agingBucket, lastFollowUp || null, nextFollowUp || null, 
-         assignedTo, estimatedValue || null, remarks]
+         productInterest || null, plannedPurchaseQuantity || null, status, parsedCreatedDate, 
+         agingDays || 0, agingBucket || null, parsedLastFollowUp, parsedNextFollowUp, 
+         assignedTo, estimatedValue || null, remarks || null]
       );
 
       const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]) as any;
+      if (rows.length === 0) {
+        return res.status(500).json({ error: 'Failed to retrieve created lead' });
+      }
       res.status(201).json(rows[0]);
     } finally {
       connection.release();
     }
   } catch (error) {
     console.error('Error creating lead:', error);
-    res.status(500).json({ error: 'Failed to create lead' });
+    res.status(500).json({ 
+      error: 'Failed to create lead',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 };
 
