@@ -15,7 +15,7 @@ const createTables = async () => {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL CHECK (role IN ('Admin', 'Front Desk', 'Sales', 'Operations')),
         is_active BOOLEAN DEFAULT true,
-        page_access TEXT DEFAULT '[]',
+        page_access TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
