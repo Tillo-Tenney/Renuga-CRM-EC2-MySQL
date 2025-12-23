@@ -104,6 +104,12 @@ install_dependencies() {
     print_info "Installing PM2 globally..."
     npm install -g pm2
     print_success "PM2 installed"
+    
+    # Configure npm for better performance and reliability
+    npm config set legacy-peer-deps true
+    npm config set prefer-offline true
+    npm config set audit false
+    print_info "npm configured for optimized installation"
 }
 
 setup_database() {
@@ -204,7 +210,13 @@ EOF
     print_success "Backend .env created"
     
     print_info "Installing backend dependencies..."
-    npm install --production=false
+    timeout 600 npm ci --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+        print_warning "npm ci failed, retrying with npm install..."
+        timeout 600 npm install --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+            print_error "Backend dependency installation failed after retry"
+            return 1
+        }
+    }
     print_success "Backend dependencies installed"
     
     print_info "Building backend..."
@@ -237,12 +249,23 @@ EOF
     chmod 600 .env.local
     print_success "Frontend .env.local created"
     
-    print_info "Installing frontend dependencies..."
-    npm install
+    print_info "Installing frontend dependencies (this may take 2-3 minutes)..."
+    # Use ci for deterministic installs and --legacy-peer-deps to avoid conflicts
+    timeout 600 npm ci --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+        print_warning "npm ci timed out or failed, retrying with npm install..."
+        timeout 600 npm install --legacy-peer-deps --no-optional --force 2>&1 | tail -20 || {
+            print_error "Frontend dependency installation failed after retry"
+            return 1
+        }
+    }
     print_success "Frontend dependencies installed"
     
-    print_info "Building frontend..."
-    npm run build
+    print_info "Building frontend for production (this may take 2-3 minutes)..."
+    # Set memory limit for Node.js to prevent OOM during build
+    timeout 600 NODE_OPTIONS="--max_old_space_size=2048" npm run build 2>&1 | tail -30 || {
+        print_error "Frontend build failed or timed out"
+        return 1
+    }
     print_success "Frontend built successfully"
 }
 
