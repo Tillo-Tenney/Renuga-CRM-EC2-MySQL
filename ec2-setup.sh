@@ -210,13 +210,20 @@ EOF
     print_success "Backend .env created"
     
     print_info "Installing backend dependencies..."
-    timeout 600 npm ci --legacy-peer-deps 2>&1 | tail -20 || {
-        print_warning "npm ci failed, retrying with npm install..."
-        timeout 600 npm install --legacy-peer-deps 2>&1 | tail -20 || {
-            print_error "Backend dependency installation failed after retry"
-            return 1
-        }
+    # Clean up old packages to avoid conflicts
+    rm -rf node_modules package-lock.json
+    
+    # Use npm install to rebuild from scratch
+    timeout 600 npm install --legacy-peer-deps 2>&1 | tail -30 || {
+        print_error "Backend dependency installation failed"
+        return 1
     }
+    
+    # Verify TypeScript was installed
+    if ! npm ls typescript > /dev/null 2>&1; then
+        print_error "TypeScript failed to install"
+        return 1
+    fi
     print_success "Backend dependencies installed"
     
     print_info "Building backend with TypeScript..."
@@ -253,15 +260,20 @@ EOF
     print_success "Frontend .env.local created"
     
     print_info "Installing frontend dependencies (this may take 2-3 minutes)..."
-    # Use ci for deterministic installs and --legacy-peer-deps to avoid conflicts
-    # Include dev dependencies needed for Vite build process
-    timeout 600 npm ci --legacy-peer-deps 2>&1 | tail -20 || {
-        print_warning "npm ci timed out or failed, retrying with npm install..."
-        timeout 600 npm install --legacy-peer-deps --force 2>&1 | tail -20 || {
-            print_error "Frontend dependency installation failed after retry"
-            return 1
-        }
+    # Clean up old packages to avoid conflicts
+    rm -rf node_modules package-lock.json
+    
+    # Use npm install to rebuild from scratch
+    timeout 600 npm install --legacy-peer-deps 2>&1 | tail -30 || {
+        print_error "Frontend dependency installation failed"
+        return 1
     }
+    
+    # Verify Vite was installed
+    if ! npm ls vite > /dev/null 2>&1; then
+        print_error "Vite failed to install"
+        return 1
+    fi
     print_success "Frontend dependencies installed"
     
     print_info "Building frontend for production (this may take 2-3 minutes)..."
