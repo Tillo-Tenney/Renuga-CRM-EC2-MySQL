@@ -1,8 +1,9 @@
 #!/bin/bash
 
 ###############################################################################
-# Renuga CRM - AWS EC2 Ubuntu Automated Setup Script
+# Renuga CRM - AWS EC2 Ubuntu Automated Setup Script (MySQL Edition)
 # This script automates the deployment of Renuga CRM on Ubuntu EC2 instances
+# Database: MySQL 8.0+
 ###############################################################################
 
 set -e  # Exit on error
@@ -18,6 +19,8 @@ NC='\033[0m' # No Color
 APP_DIR="/var/www/renuga-crm"
 DB_NAME="renuga_crm"
 DB_USER="renuga_user"
+DB_HOST="localhost"
+DB_PORT="3306"
 NODE_VERSION="20"
 
 # Functions
@@ -86,9 +89,9 @@ install_dependencies() {
     print_success "Node.js $(node --version) installed"
     print_success "npm $(npm --version) installed"
     
-    print_info "Installing PostgreSQL..."
-    apt install -y postgresql postgresql-contrib
-    print_success "PostgreSQL installed"
+    print_info "Installing MySQL Server..."
+    DEBIAN_FRONTEND=noninteractive apt install -y mysql-server mysql-client
+    print_success "MySQL Server installed"
     
     print_info "Installing Nginx..."
     apt install -y nginx
@@ -104,28 +107,37 @@ install_dependencies() {
 }
 
 setup_database() {
-    print_header "Step 2: Setting Up PostgreSQL Database"
+    print_header "Step 2: Setting Up MySQL Database"
     
     # Generate a random password for database
     DB_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-20)
     
+    print_info "Securing MySQL installation..."
+    systemctl enable mysql
+    systemctl start mysql
+    print_success "MySQL service enabled and started"
+    
     print_info "Creating database and user..."
-    sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME};" 2>/dev/null || true
-    sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};"
-    sudo -u postgres psql -c "ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};"
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};" 2>/dev/null || true
+    mysql -u root -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'${DB_HOST}' IDENTIFIED BY '${DB_PASSWORD}';" 2>/dev/null || true
+    mysql -u root -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'${DB_HOST}';"
+    mysql -u root -e "FLUSH PRIVILEGES;"
     
     print_success "Database '${DB_NAME}' created"
-    print_success "User '${DB_USER}' created"
+    print_success "User '${DB_USER}' created with all privileges"
     
     # Save database credentials
     echo "$DB_PASSWORD" > /tmp/db_password.txt
     chmod 600 /tmp/db_password.txt
     
-    print_info "Ensuring PostgreSQL is enabled and started..."
-    systemctl enable postgresql
-    systemctl start postgresql
-    print_success "PostgreSQL service configured"
+    print_info "Configuring MySQL for production use..."
+    # Configure MySQL for better performance and security
+    if ! grep -q "max_connections = 200" /etc/mysql/mysql.conf.d/mysqld.cnf; then
+        sed -i '/\[mysqld\]/a max_connections = 200' /etc/mysql/mysql.conf.d/mysqld.cnf
+        sed -i '/\[mysqld\]/a innodb_buffer_pool_size = 1G' /etc/mysql/mysql.conf.d/mysqld.cnf
+    fi
+    systemctl restart mysql
+    print_success "MySQL configured and restarted"
 }
 
 setup_application() {
@@ -173,8 +185,12 @@ configure_backend() {
 PORT=3001
 NODE_ENV=production
 
-# Database Configuration
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}
+# MySQL Database Configuration
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=${DB_NAME}
 
 # JWT Configuration
 JWT_SECRET=${JWT_SECRET}
@@ -375,10 +391,12 @@ create_maintenance_scripts() {
 BACKUP_DIR="/var/backups/renuga-crm"
 mkdir -p "\$BACKUP_DIR"
 TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
-PGPASSWORD="${DB_PASSWORD}" pg_dump -U ${DB_USER} -h localhost ${DB_NAME} > "\$BACKUP_DIR/renuga_crm_\$TIMESTAMP.sql"
+mysqldump -u ${DB_USER} -p${DB_PASSWORD} -h ${DB_HOST} ${DB_NAME} > "\$BACKUP_DIR/renuga_crm_\$TIMESTAMP.sql"
+# Compress backup
+gzip "\$BACKUP_DIR/renuga_crm_\$TIMESTAMP.sql"
 # Keep only last 7 days of backups
-find "\$BACKUP_DIR" -name "renuga_crm_*.sql" -mtime +7 -delete
-echo "Database backup completed: renuga_crm_\$TIMESTAMP.sql"
+find "\$BACKUP_DIR" -name "renuga_crm_*.sql.gz" -mtime +7 -delete
+echo "Database backup completed: renuga_crm_\$TIMESTAMP.sql.gz"
 EOF
     
     chmod +x /usr/local/bin/backup-renuga-db.sh
@@ -424,11 +442,17 @@ EOF
 verify_installation() {
     print_header "Step 10: Verifying Installation"
     
-    print_info "Checking PostgreSQL..."
-    if systemctl is-active --quiet postgresql; then
-        print_success "PostgreSQL is running"
+    print_info "Checking MySQL..."
+    if systemctl is-active --quiet mysql; then
+        print_success "MySQL is running"
+        # Test database connectivity
+        if mysql -u ${DB_USER} -p$(cat /tmp/db_password.txt) -h ${DB_HOST} -e "SELECT 1;" > /dev/null 2>&1; then
+            print_success "MySQL database connection verified"
+        else
+            print_warning "MySQL database connection test failed"
+        fi
     else
-        print_error "PostgreSQL is not running"
+        print_error "MySQL is not running"
     fi
     
     print_info "Checking Nginx..."
