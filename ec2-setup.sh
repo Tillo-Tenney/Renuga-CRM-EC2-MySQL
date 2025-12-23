@@ -277,30 +277,38 @@ EOF
     
     # Run npm install with very verbose output
     print_info "Running: npm install --legacy-peer-deps"
-    (
-        echo "=== Frontend npm install started at $(date) ===" > "${INSTALL_LOG}"
-        npm install --legacy-peer-deps 2>&1 | tee -a "${INSTALL_LOG}"
-        echo "=== Frontend npm install completed at $(date) ===" >> "${INSTALL_LOG}"
-    ) &
-    local INSTALL_PID=$!
     
-    # Wait for install with timeout
-    if ! timeout 600 wait $INSTALL_PID; then
-        EXIT_CODE=$?
-        print_error "Frontend dependency installation failed or timed out (exit code: ${EXIT_CODE})"
-        print_error ""
+    # Initialize log file
+    {
+        echo "=== Frontend npm install started at $(date) ==="
+        echo "Working directory: $(pwd)"
+        echo "Node version: $(node --version)"
+        echo "npm version: $(npm --version)"
+        echo ""
+    } > "${INSTALL_LOG}"
+    
+    # Run npm install with tee for real-time logging
+    timeout 600 npm install --legacy-peer-deps 2>&1 | tee -a "${INSTALL_LOG}"
+    INSTALL_EXIT=${PIPESTATUS[0]}
+    
+    # Log completion
+    {
+        echo ""
+        echo "=== Frontend npm install completed at $(date) ==="
+        echo "Exit code: ${INSTALL_EXIT}"
+    } >> "${INSTALL_LOG}"
+    
+    # Check exit code
+    if [ $INSTALL_EXIT -eq 124 ]; then
+        print_error "Frontend dependency installation timed out after 600 seconds"
         print_error "Last 50 lines of install log:"
-        if [ -f "${INSTALL_LOG}" ]; then
-            tail -50 "${INSTALL_LOG}"
-        else
-            print_error "ERROR: Log file not created at ${INSTALL_LOG}"
-        fi
+        tail -50 "${INSTALL_LOG}"
         return 1
     fi
     
-    # Verify npm install exit code
-    if [ $? -ne 0 ]; then
-        print_error "npm install process exited with error"
+    if [ $INSTALL_EXIT -ne 0 ]; then
+        print_error "Frontend dependency installation failed (exit code: ${INSTALL_EXIT})"
+        print_error "Last 50 lines of install log:"
         tail -50 "${INSTALL_LOG}"
         return 1
     fi
