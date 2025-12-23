@@ -102,7 +102,7 @@ option_generate_db_password() {
     print_success "Generated Password:"
     echo "$PASS"
     echo ""
-    print_info "Use this when creating PostgreSQL user"
+    print_info "Use this when creating MySQL user"
 }
 
 # Option 4: Show backend .env template
@@ -113,8 +113,12 @@ option_show_backend_env() {
     echo "PORT=3001"
     echo "NODE_ENV=production"
     echo ""
-    echo "# Database Configuration"
-    echo "DATABASE_URL=postgresql://renuga_user:YOUR_PASSWORD@localhost:5432/renuga_crm"
+    echo "# MySQL Database Configuration"
+    echo "DB_HOST=localhost"
+    echo "DB_PORT=3306"
+    echo "DB_USER=renuga_user"
+    echo "DB_PASSWORD=YOUR_PASSWORD"
+    echo "DB_NAME=renuga_crm"
     echo ""
     echo "# JWT Configuration"
     echo "JWT_SECRET=$JWT"
@@ -153,8 +157,12 @@ option_create_backend_env() {
 PORT=3001
 NODE_ENV=production
 
-# Database Configuration
-DATABASE_URL=postgresql://renuga_user:${DB_PASS}@localhost:5432/renuga_crm
+# MySQL Database Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=renuga_user
+DB_PASSWORD=${DB_PASS}
+DB_NAME=renuga_crm
 
 # JWT Configuration
 JWT_SECRET=${JWT}
@@ -199,8 +207,8 @@ option_install_deps() {
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt install -y nodejs
     
-    print_info "Installing PostgreSQL..."
-    apt install -y postgresql postgresql-contrib
+    print_info "Installing MySQL..."
+    apt install -y mysql-server mysql-client
     
     print_info "Installing Nginx..."
     apt install -y nginx
@@ -216,7 +224,7 @@ option_install_deps() {
 
 # Option 9: Setup database
 option_setup_database() {
-    print_header "Setup PostgreSQL Database"
+    print_header "Setup MySQL Database"
     
     if [ "$EUID" -ne 0 ]; then
         print_error "This option requires root. Use: sudo $0"
@@ -232,10 +240,10 @@ option_setup_database() {
     read -p "Database password: " DB_PASS
     
     print_info "Creating database..."
-    sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME};" 2>/dev/null || true
-    sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}';" 2>/dev/null || true
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};"
-    sudo -u postgres psql -c "ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};"
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};" 2>/dev/null || true
+    mysql -u root -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';" 2>/dev/null || true
+    mysql -u root -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
+    mysql -u root -e "FLUSH PRIVILEGES;"
     
     print_success "Database setup complete"
     echo "Database: ${DB_NAME}"
@@ -377,8 +385,8 @@ option_show_status() {
     echo -e "\n${BLUE}Nginx Status:${NC}"
     systemctl status nginx --no-pager
     
-    echo -e "\n${BLUE}PostgreSQL Status:${NC}"
-    systemctl status postgresql --no-pager
+    echo -e "\n${BLUE}MySQL Status:${NC}"
+    systemctl status mysql --no-pager
     
     echo -e "\n${BLUE}Application URL:${NC}"
     IP=$(get_ip)
@@ -391,7 +399,7 @@ option_view_logs() {
     echo "1. Backend PM2 logs"
     echo "2. Nginx error logs"
     echo "3. Nginx access logs"
-    echo "4. PostgreSQL logs"
+    echo "4. MySQL error logs"
     echo "0. Back"
     echo ""
     read -p "Select log to view: " log_choice
@@ -400,7 +408,7 @@ option_view_logs() {
         1) pm2 logs renuga-crm-api --lines 50 ;;
         2) tail -n 50 /var/log/nginx/error.log ;;
         3) tail -n 50 /var/log/nginx/access.log ;;
-        4) journalctl -u postgresql -n 50 ;;
+        4) tail -n 50 /var/log/mysql/error.log ;;
         0) return ;;
         *) print_error "Invalid option" ;;
     esac
