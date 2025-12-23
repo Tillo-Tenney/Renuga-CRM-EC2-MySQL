@@ -210,17 +210,20 @@ EOF
     print_success "Backend .env created"
     
     print_info "Installing backend dependencies..."
-    timeout 600 npm ci --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+    timeout 600 npm ci --legacy-peer-deps 2>&1 | tail -20 || {
         print_warning "npm ci failed, retrying with npm install..."
-        timeout 600 npm install --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+        timeout 600 npm install --legacy-peer-deps 2>&1 | tail -20 || {
             print_error "Backend dependency installation failed after retry"
             return 1
         }
     }
     print_success "Backend dependencies installed"
     
-    print_info "Building backend..."
-    npm run build
+    print_info "Building backend with TypeScript..."
+    timeout 600 npm run build 2>&1 | tail -20 || {
+        print_error "Backend build failed"
+        return 1
+    }
     print_success "Backend built successfully"
     
     print_info "Running database migrations..."
@@ -251,9 +254,10 @@ EOF
     
     print_info "Installing frontend dependencies (this may take 2-3 minutes)..."
     # Use ci for deterministic installs and --legacy-peer-deps to avoid conflicts
-    timeout 600 npm ci --legacy-peer-deps --no-optional 2>&1 | tail -20 || {
+    # Include dev dependencies needed for Vite build process
+    timeout 600 npm ci --legacy-peer-deps 2>&1 | tail -20 || {
         print_warning "npm ci timed out or failed, retrying with npm install..."
-        timeout 600 npm install --legacy-peer-deps --no-optional --force 2>&1 | tail -20 || {
+        timeout 600 npm install --legacy-peer-deps --force 2>&1 | tail -20 || {
             print_error "Frontend dependency installation failed after retry"
             return 1
         }
