@@ -1,13 +1,15 @@
-import pool from './database.js';
+import pool, { getConnection } from './database.js';
 import bcrypt from 'bcrypt';
 
 const seedData = async () => {
+  const connection = await getConnection();
+  
   try {
     console.log('Starting database seeding...');
 
     // Check if data already exists
-    const { rows: existingUsers } = await pool.query('SELECT COUNT(*) FROM users');
-    if (parseInt(existingUsers[0].count) > 0) {
+    const [existingUsers] = await connection.execute('SELECT COUNT(*) as count FROM users');
+    if (existingUsers[0].count > 0) {
       console.log('Database already seeded. Skipping...');
       return;
     }
@@ -22,8 +24,8 @@ const seedData = async () => {
 
     for (const user of users) {
       const passwordHash = await bcrypt.hash(user.password, 10);
-      await pool.query(
-        'INSERT INTO users (id, name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, $5, $6)',
+      await connection.execute(
+        'INSERT INTO users (id, name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?)',
         [user.id, user.name, user.email, passwordHash, user.role, true]
       );
     }
@@ -42,8 +44,8 @@ const seedData = async () => {
     ];
 
     for (const product of products) {
-      await pool.query(
-        'INSERT INTO products (id, name, category, unit, price, available_quantity, threshold_quantity, status, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      await connection.execute(
+        'INSERT INTO products (id, name, category, unit, price, available_quantity, threshold_quantity, status, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [product.id, product.name, product.category, product.unit, product.price, product.availableQuantity, product.thresholdQuantity, product.status, true]
       );
     }
@@ -59,8 +61,8 @@ const seedData = async () => {
     ];
 
     for (const customer of customers) {
-      await pool.query(
-        'INSERT INTO customers (id, name, mobile, email, address, total_orders, total_value) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      await connection.execute(
+        'INSERT INTO customers (id, name, mobile, email, address, total_orders, total_value) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [customer.id, customer.name, customer.mobile, customer.email || null, customer.address, customer.totalOrders, customer.totalValue]
       );
     }
@@ -76,8 +78,8 @@ const seedData = async () => {
     ];
 
     for (const callLog of callLogs) {
-      await pool.query(
-        'INSERT INTO call_logs (id, call_date, customer_name, mobile, query_type, product_interest, next_action, follow_up_date, remarks, assigned_to, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+      await connection.execute(
+        'INSERT INTO call_logs (id, call_date, customer_name, mobile, query_type, product_interest, next_action, follow_up_date, remarks, assigned_to, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [callLog.id, callLog.callDate, callLog.customerName, callLog.mobile, callLog.queryType, callLog.productInterest, callLog.nextAction, callLog.followUpDate || null, callLog.remarks, callLog.assignedTo, callLog.status]
       );
     }
@@ -91,8 +93,8 @@ const seedData = async () => {
     ];
 
     for (const lead of leads) {
-      await pool.query(
-        'INSERT INTO leads (id, call_id, customer_name, mobile, email, address, product_interest, planned_purchase_quantity, status, created_date, aging_days, aging_bucket, last_follow_up, next_follow_up, assigned_to, estimated_value, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)',
+      await connection.execute(
+        'INSERT INTO leads (id, call_id, customer_name, mobile, email, address, product_interest, planned_purchase_quantity, status, created_date, aging_days, aging_bucket, last_follow_up, next_follow_up, assigned_to, estimated_value, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [lead.id, lead.callId, lead.customerName, lead.mobile, lead.email || null, lead.address || null, lead.productInterest, lead.plannedPurchaseQuantity || null, lead.status, lead.createdDate, lead.agingDays, lead.agingBucket, lead.lastFollowUp || null, lead.nextFollowUp || null, lead.assignedTo, lead.estimatedValue || null, lead.remarks]
       );
     }
@@ -102,6 +104,8 @@ const seedData = async () => {
   } catch (error) {
     console.error('Error during seeding:', error);
     throw error;
+  } finally {
+    connection.release();
   }
 };
 

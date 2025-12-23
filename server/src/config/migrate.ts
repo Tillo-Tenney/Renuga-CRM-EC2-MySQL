@@ -1,11 +1,13 @@
-import pool from './database.js';
+import pool, { getConnection } from './database.js';
 
 const createTables = async () => {
+  const connection = await getConnection();
+  
   try {
     console.log('Starting database migration...');
 
     // Users table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -15,13 +17,13 @@ const createTables = async () => {
         is_active BOOLEAN DEFAULT true,
         page_access TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Users table created');
 
     // Products table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -33,13 +35,13 @@ const createTables = async () => {
         status VARCHAR(50) NOT NULL CHECK (status IN ('Active', 'Alert', 'Out of Stock')),
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Products table created');
 
     // Customers table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS customers (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -49,13 +51,13 @@ const createTables = async () => {
         total_orders INTEGER DEFAULT 0,
         total_value DECIMAL(12, 2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Customers table created');
 
     // Call logs table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS call_logs (
         id VARCHAR(50) PRIMARY KEY,
         call_date TIMESTAMP NOT NULL,
@@ -64,18 +66,18 @@ const createTables = async () => {
         query_type VARCHAR(100) NOT NULL CHECK (query_type IN ('Price Inquiry', 'Product Info', 'Complaint', 'Order Status', 'General')),
         product_interest VARCHAR(255),
         next_action VARCHAR(100) NOT NULL CHECK (next_action IN ('Follow-up', 'Lead Created', 'Order Updated', 'New Order', 'No Action')),
-        follow_up_date TIMESTAMP,
+        follow_up_date TIMESTAMP NULL DEFAULT NULL,
         remarks TEXT,
         assigned_to VARCHAR(255) NOT NULL,
         status VARCHAR(50) NOT NULL CHECK (status IN ('Open', 'Closed')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Call logs table created');
 
     // Leads table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS leads (
         id VARCHAR(50) PRIMARY KEY,
         call_id VARCHAR(50),
@@ -89,20 +91,20 @@ const createTables = async () => {
         created_date TIMESTAMP NOT NULL,
         aging_days INTEGER DEFAULT 0,
         aging_bucket VARCHAR(50) CHECK (aging_bucket IN ('Fresh', 'Warm', 'At Risk', 'Critical')),
-        last_follow_up TIMESTAMP,
-        next_follow_up TIMESTAMP,
+        last_follow_up TIMESTAMP NULL DEFAULT NULL,
+        next_follow_up TIMESTAMP NULL DEFAULT NULL,
         assigned_to VARCHAR(255) NOT NULL,
         estimated_value DECIMAL(12, 2),
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (call_id) REFERENCES call_logs(id) ON DELETE SET NULL
-      );
+      )
     `);
     console.log('✓ Leads table created');
 
     // Orders table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS orders (
         id VARCHAR(50) PRIMARY KEY,
         lead_id VARCHAR(50),
@@ -114,7 +116,7 @@ const createTables = async () => {
         status VARCHAR(100) NOT NULL CHECK (status IN ('Order Received', 'In Production', 'Ready for Delivery', 'Out for Delivery', 'Delivered', 'Cancelled')),
         order_date TIMESTAMP NOT NULL,
         expected_delivery_date TIMESTAMP NOT NULL,
-        actual_delivery_date TIMESTAMP,
+        actual_delivery_date TIMESTAMP NULL DEFAULT NULL,
         aging_days INTEGER DEFAULT 0,
         is_delayed BOOLEAN DEFAULT false,
         payment_status VARCHAR(50) NOT NULL CHECK (payment_status IN ('Pending', 'Partial', 'Completed')),
@@ -122,17 +124,17 @@ const createTables = async () => {
         assigned_to VARCHAR(255) NOT NULL,
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
         FOREIGN KEY (call_id) REFERENCES call_logs(id) ON DELETE SET NULL
-      );
+      )
     `);
     console.log('✓ Orders table created');
 
     // Order products table (many-to-many relationship)
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS order_products (
-        id SERIAL PRIMARY KEY,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         order_id VARCHAR(50) NOT NULL,
         product_id VARCHAR(50) NOT NULL,
         product_name VARCHAR(255) NOT NULL,
@@ -143,12 +145,12 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
-      );
+      )
     `);
     console.log('✓ Order products table created');
 
     // Tasks table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS tasks (
         id VARCHAR(50) PRIMARY KEY,
         type VARCHAR(100) NOT NULL CHECK (type IN ('Follow-up', 'Delivery', 'Call Back', 'Meeting')),
@@ -160,26 +162,26 @@ const createTables = async () => {
         assigned_to VARCHAR(255) NOT NULL,
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Tasks table created');
 
     // Shift notes table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS shift_notes (
         id VARCHAR(50) PRIMARY KEY,
         created_by VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
     console.log('✓ Shift notes table created');
 
     // Remark logs table
-    await pool.query(`
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS remark_logs (
         id VARCHAR(50) PRIMARY KEY,
         entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('callLog', 'lead', 'order', 'product', 'customer', 'user')),
@@ -187,28 +189,28 @@ const createTables = async () => {
         remark TEXT NOT NULL,
         created_by VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      )
     `);
     console.log('✓ Remark logs table created');
 
     // Create indexes for better query performance
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_call_logs_mobile ON call_logs(mobile);
-      CREATE INDEX IF NOT EXISTS idx_call_logs_status ON call_logs(status);
-      CREATE INDEX IF NOT EXISTS idx_leads_mobile ON leads(mobile);
-      CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-      CREATE INDEX IF NOT EXISTS idx_orders_mobile ON orders(mobile);
-      CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-      CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
-      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-      CREATE INDEX IF NOT EXISTS idx_remark_logs_entity ON remark_logs(entity_type, entity_id);
-    `);
+    await connection.execute(`CREATE INDEX idx_call_logs_mobile ON call_logs(mobile)`);
+    await connection.execute(`CREATE INDEX idx_call_logs_status ON call_logs(status)`);
+    await connection.execute(`CREATE INDEX idx_leads_mobile ON leads(mobile)`);
+    await connection.execute(`CREATE INDEX idx_leads_status ON leads(status)`);
+    await connection.execute(`CREATE INDEX idx_orders_mobile ON orders(mobile)`);
+    await connection.execute(`CREATE INDEX idx_orders_status ON orders(status)`);
+    await connection.execute(`CREATE INDEX idx_tasks_due_date ON tasks(due_date)`);
+    await connection.execute(`CREATE INDEX idx_tasks_status ON tasks(status)`);
+    await connection.execute(`CREATE INDEX idx_remark_logs_entity ON remark_logs(entity_type, entity_id)`);
     console.log('✓ Indexes created');
 
     console.log('Database migration completed successfully!');
   } catch (error) {
     console.error('Error during migration:', error);
     throw error;
+  } finally {
+    connection.release();
   }
 };
 

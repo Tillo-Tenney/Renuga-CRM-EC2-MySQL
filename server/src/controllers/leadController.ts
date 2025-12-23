@@ -1,14 +1,19 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
-import pool from '../config/database.js';
+import pool, { getConnection } from '../config/database.js';
 import { validateAndConvertFields } from '../utils/fieldValidator.js';
 
 export const getAllLeads = async (req: AuthRequest, res: Response) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM leads ORDER BY created_date DESC'
-    );
-    res.json(rows);
+    const connection = await pool.getConnection();
+    try {
+      const [rows] = await connection.execute(
+        'SELECT * FROM leads ORDER BY created_date DESC'
+      );
+      res.json(rows);
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Error fetching leads:', error);
     res.status(500).json({ error: 'Failed to fetch leads' });
@@ -18,13 +23,18 @@ export const getAllLeads = async (req: AuthRequest, res: Response) => {
 export const getLeadById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { rows } = await pool.query('SELECT * FROM leads WHERE id = $1', [id]);
-    
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'Lead not found' });
+    const connection = await pool.getConnection();
+    try {
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+      
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+      
+      res.json(rows[0]);
+    } finally {
+      connection.release();
     }
-    
-    res.json(rows[0]);
   } catch (error) {
     console.error('Error fetching lead:', error);
     res.status(500).json({ error: 'Failed to fetch lead' });
@@ -53,20 +63,25 @@ export const createLead = async (req: AuthRequest, res: Response) => {
       remarks,
     } = req.body;
 
-    const { rows } = await pool.query(
-      `INSERT INTO leads 
-       (id, call_id, customer_name, mobile, email, address, product_interest, 
-        planned_purchase_quantity, status, created_date, aging_days, aging_bucket,
-        last_follow_up, next_follow_up, assigned_to, estimated_value, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-       RETURNING *`,
-      [id, callId || null, customerName, mobile, email || null, address || null, 
-       productInterest, plannedPurchaseQuantity || null, status, createdDate, 
-       agingDays || 0, agingBucket, lastFollowUp || null, nextFollowUp || null, 
-       assignedTo, estimatedValue || null, remarks]
-    );
+    const connection = await pool.getConnection();
+    try {
+      await connection.execute(
+        `INSERT INTO leads 
+         (id, call_id, customer_name, mobile, email, address, product_interest, 
+          planned_purchase_quantity, status, created_date, aging_days, aging_bucket,
+          last_follow_up, next_follow_up, assigned_to, estimated_value, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, callId || null, customerName, mobile, email || null, address || null, 
+         productInterest, plannedPurchaseQuantity || null, status, createdDate, 
+         agingDays || 0, agingBucket, lastFollowUp || null, nextFollowUp || null, 
+         assignedTo, estimatedValue || null, remarks]
+      );
 
-    res.status(201).json(rows[0]);
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+      res.status(201).json(rows[0]);
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Error creating lead:', error);
     res.status(500).json({ error: 'Failed to create lead' });
@@ -85,17 +100,24 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    const { rows } = await pool.query(
-      `UPDATE leads SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1 RETURNING *`,
-      [id, ...values]
-    );
+    const connection = await pool.getConnection();
+    try {
+      await connection.execute(
+        `UPDATE leads SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [id, ...values]
+      );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'Lead not found' });
+      const [rows] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+
+      res.json(rows[0]);
+    } finally {
+      connection.release();
     }
-
-    res.json(rows[0]);
   } catch (error) {
     console.error('Error updating lead:', error);
     res.status(500).json({ error: 'Failed to update lead' });
@@ -105,13 +127,18 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
 export const deleteLead = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { rowCount } = await pool.query('DELETE FROM leads WHERE id = $1', [id]);
+    const connection = await pool.getConnection();
+    try {
+      const result = await connection.execute('DELETE FROM leads WHERE id = ?', [id]);
 
-    if (rowCount === 0) {
-      return res.status(404).json({ error: 'Lead not found' });
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+
+      res.json({ success: true, message: 'Lead deleted' });
+    } finally {
+      connection.release();
     }
-
-    res.json({ success: true, message: 'Lead deleted' });
   } catch (error) {
     console.error('Error deleting lead:', error);
     res.status(500).json({ error: 'Failed to delete lead' });
