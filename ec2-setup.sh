@@ -254,12 +254,14 @@ configure_frontend() {
     print_info "Creating frontend environment configuration..."
     cat > .env.local << EOF
 # API Configuration
-VITE_API_URL=http://${PUBLIC_IP}:3001
+# Use Nginx proxy (port 80) instead of direct backend connection (port 3001)
+# Port 3001 is only accessible from localhost, not from the public internet
+VITE_API_URL=http://${PUBLIC_IP}
 EOF
     
     chmod 600 .env.local
     print_success "Frontend .env.local created"
-    print_info "Environment: VITE_API_URL=http://${PUBLIC_IP}:3001"
+    print_info "Environment: VITE_API_URL=http://${PUBLIC_IP}"
     
     # ============================================================================
     # INSTALL DEPENDENCIES
