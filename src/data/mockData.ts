@@ -128,7 +128,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Front Desk' | 'Sales' | 'Operations';
+  role: 'Admin' | 'Front Desk';
   isActive: boolean;
   pageAccess: ('Dashboard' | 'CallLog' | 'Leads' | 'Orders' | 'MasterData')[];
 }
@@ -150,9 +150,9 @@ export const calculateAgingDays = (date: Date): number => {
 
 // Mock Users
 export const mockUsers: User[] = [
-  { id: 'U001', name: 'Priya S.', email: 'priya@renuga.com', role: 'Front Desk', isActive: true, pageAccess: ['Dashboard', 'CallLog', 'Leads'] },
-  { id: 'U002', name: 'Ravi K.', email: 'ravi@renuga.com', role: 'Sales', isActive: true, pageAccess: ['Dashboard', 'Leads', 'Orders'] },
-  { id: 'U003', name: 'Muthu R.', email: 'muthu@renuga.com', role: 'Operations', isActive: true, pageAccess: ['Dashboard', 'Orders', 'MasterData'] },
+  { id: 'U001', name: 'Priya S.', email: 'priya@renuga.com', role: 'Front Desk', isActive: true, pageAccess: ['Dashboard'] },
+  { id: 'U002', name: 'Ravi K.', email: 'ravi@renuga.com', role: 'Front Desk', isActive: true, pageAccess: ['Dashboard', 'Leads', 'Orders'] },
+  { id: 'U003', name: 'Muthu R.', email: 'muthu@renuga.com', role: 'Front Desk', isActive: true, pageAccess: ['Dashboard', 'Orders', 'MasterData'] },
   { id: 'U004', name: 'Admin', email: 'admin@renuga.com', role: 'Admin', isActive: true, pageAccess: ['Dashboard', 'CallLog', 'Leads', 'Orders', 'MasterData'] },
 ];
 

@@ -16,17 +16,17 @@ const seedData = async () => {
 
     // Seed Users
     const users = [
-      { id: 'U001', name: 'Priya S.', email: 'priya@renuga.com', password: 'password123', role: 'Front Desk' },
-      { id: 'U002', name: 'Ravi K.', email: 'ravi@renuga.com', password: 'password123', role: 'Sales' },
-      { id: 'U003', name: 'Muthu R.', email: 'muthu@renuga.com', password: 'password123', role: 'Operations' },
-      { id: 'U004', name: 'Admin', email: 'admin@renuga.com', password: 'admin123', role: 'Admin' },
+      { id: 'U001', name: 'Priya S.', email: 'priya@renuga.com', password: 'password123', role: 'Front Desk', pageAccess: ['Dashboard'] },
+      { id: 'U002', name: 'Ravi K.', email: 'ravi@renuga.com', password: 'password123', role: 'Front Desk', pageAccess: ['Dashboard', 'Leads', 'Orders'] },
+      { id: 'U003', name: 'Muthu R.', email: 'muthu@renuga.com', password: 'password123', role: 'Front Desk', pageAccess: ['Dashboard', 'Orders', 'MasterData'] },
+      { id: 'U004', name: 'Admin', email: 'admin@renuga.com', password: 'admin123', role: 'Admin', pageAccess: ['Dashboard', 'CallLog', 'Leads', 'Orders', 'MasterData'] },
     ];
 
     for (const user of users) {
       const passwordHash = await bcrypt.hash(user.password, 10);
       await connection.execute(
-        'INSERT INTO users (id, name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?)',
-        [user.id, user.name, user.email, passwordHash, user.role, true]
+        'INSERT INTO users (id, name, email, password_hash, role, is_active, page_access) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [user.id, user.name, user.email, passwordHash, user.role, true, JSON.stringify(user.pageAccess)]
       );
     }
     console.log('✓ Users seeded');

@@ -208,6 +208,12 @@ export const createUser = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Validate role - only Admin and Front Desk allowed
+    const validRoles = ['Admin', 'Front Desk'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Only Admin and Front Desk are allowed' });
+    }
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -250,6 +256,12 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
 
     if (!name || !email || !role) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Validate role - only Admin and Front Desk allowed
+    const validRoles = ['Admin', 'Front Desk'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Only Admin and Front Desk are allowed' });
     }
 
     // Determine page access - Admin gets all pages

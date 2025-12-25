@@ -707,8 +707,6 @@ const MasterDataPage = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Front Desk">Front Desk</SelectItem>
-                          <SelectItem value="Sales">Sales</SelectItem>
-                          <SelectItem value="Operations">Operations</SelectItem>
                           <SelectItem value="Admin">Admin</SelectItem>
                         </SelectContent>
                       </Select>
@@ -745,13 +743,19 @@ const MasterDataPage = () => {
                               id="dash"
                               checked={userPageAccess.includes('Dashboard')}
                               onCheckedChange={(checked) => {
+                                // Dashboard is always selected for Front Desk
+                                if (!checked && userPageAccess.includes('Dashboard')) {
+                                  // Prevent unchecking Dashboard for Front Desk
+                                  return;
+                                }
                                 setUserPageAccess(checked 
                                   ? [...userPageAccess, 'Dashboard']
                                   : userPageAccess.filter(p => p !== 'Dashboard')
                                 );
                               }}
+                              disabled={userForm.role === 'Front Desk' && userPageAccess.includes('Dashboard')}
                             />
-                            <Label htmlFor="dash" className="text-sm font-normal cursor-pointer">Dashboard</Label>
+                            <Label htmlFor="dash" className="text-sm font-normal cursor-pointer">Dashboard (Always included)</Label>
                           </div>
                           <div className="flex items-center gap-2">
                             <Checkbox
@@ -1091,20 +1095,11 @@ const MasterDataPage = () => {
                             )}
                             {user.role === 'Front Desk' && (
                               <>
-                                <Badge variant="secondary" className="text-xs">Calls</Badge>
-                                <Badge variant="secondary" className="text-xs">Leads</Badge>
-                              </>
-                            )}
-                            {user.role === 'Sales' && (
-                              <>
-                                <Badge variant="secondary" className="text-xs">Leads</Badge>
-                                <Badge variant="secondary" className="text-xs">Orders</Badge>
-                              </>
-                            )}
-                            {user.role === 'Operations' && (
-                              <>
-                                <Badge variant="secondary" className="text-xs">Orders</Badge>
-                                <Badge variant="secondary" className="text-xs">Delivery</Badge>
+                                <Badge variant="secondary" className="text-xs">Dashboard</Badge>
+                                {user.pageAccess.includes('CallLog') && <Badge variant="secondary" className="text-xs">Call Logs</Badge>}
+                                {user.pageAccess.includes('Leads') && <Badge variant="secondary" className="text-xs">Leads</Badge>}
+                                {user.pageAccess.includes('Orders') && <Badge variant="secondary" className="text-xs">Orders</Badge>}
+                                {user.pageAccess.includes('MasterData') && <Badge variant="secondary" className="text-xs">Master Data</Badge>}
                               </>
                             )}
                           </div>
